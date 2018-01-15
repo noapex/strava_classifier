@@ -7,10 +7,10 @@ from stravalib.client import Client
 from os.path import expanduser
 
 # levantar actividades de las ultimas n horas
-last_n_hours = 2400
+last_n_hours = 24
 
 # aplicar cambios. False para pruebas
-write = False
+write = True
 
 
 locations = {
