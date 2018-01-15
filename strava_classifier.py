@@ -7,61 +7,65 @@ from stravalib.client import Client
 from os.path import expanduser
 
 # levantar actividades de las ultimas n horas
-last_n_hours = 24
+last_n_hours = 2400
 
 # aplicar cambios. False para pruebas
-dry_run = False
+write = False
+
+
+locations = {
+    'hudson': {
+        'name': 'Río de hudson',
+        'latlng': [-34.753652, -58.108775],
+    },
+    'mtb': {
+        'name': 'Entrenamiento MTB',
+        'latlng': [-34.694710, -58.259766],
+    },
+    'ceamse': {
+        'name': 'CEAMSE',
+        'latlng': [-34.685958, -58.278649]
+    },
+    'unq': {
+        'name_go': 'Ida a la UNQ',
+        'name_back': 'Vuelta de la UNQ',
+        'latlng': [-34.707308, -58.278631],
+        'commute': True,
+        'private': True
+    },
+    'pato': {
+        'name_go': 'Quilmes - El Pato',
+        'name_back': 'El Pato - Quilmes',
+        'latlng': [-34.890243,-58.150957],
+        'commute': False,
+        'private': False,
+        'tolerance': 0.5,
+    }
+
+}
+
+
 users = [
     {
-        'ramiro': {
+        'user1': {
+            'default_private': True,
             'token': 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-            'trainer_bike': 'b3006947',
+            'bici_rodillo': 'b3666947',
             # con solo pasar aplica
-            'pass_through_locations': [{
-                'name': 'Paseo costero',
-                'latlng': [-34.753652, -58.108775]
-            }],
-
+            'pass_through_locations': [locations['hudson'], locations['ceamse'], locations['mtb']],
             # act. que matchean si se llega o se parte de las mismas
-            'destinations': [{
-                'name_go': 'Ida a la Trabajo',
-                'name_back': 'Vuelta del Trabajo',
-                'latlng': [-24.307308, -34.778631],
-                'commute': True,
-                'private': True
-            }, {
-                'name_go': 'Ida al gimnasio',
-                'name_back': 'Vuelta del gimnasio',
-                'latlng': [-24.828601, -34.161967],
-                'commute': False,
-                'private': True
-            }]
+            'destinations': [locations['feli'], locations['unq'], locations['pato']]
         }
     },
     {
-        'diega': {
+        'user2': {
+            'default_private': False,
             'token': 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-            'trainer_bike': 'b4100947',
+            'bici_rodillo': 'b4139947',
             # con solo pasar aplica
-            'pass_through_locations': [{
-                'name': 'Paseo costero',
-                'latlng': [-34.753652, -58.108775]
-            }],
-
+            'pass_through_locations': [locations['hudson'], locations['ceamse'], locations['mtb']],
             # act. que matchean si se llega o se parte de las mismas
-            'destinations': [{
-                'name_go': 'Ida a la Trabajo',
-                'name_back': 'Vuelta del Trabajo',
-                'latlng': [-24.307308, -34.778631],
-                'commute': True,
-                'private': True
-            }, {
-                'name_go': 'Ida al gimnasio',
-                'name_back': 'Vuelta del gimnasio',
-                'latlng': [-24.828601, -34.161967],
-                'commute': False,
-                'private': True
-            }]
+            'destinations': [locations['feli'], locations['unq'], locations['pato']]
         }
     }
 ]
@@ -144,21 +148,22 @@ for user in users:
                 if last_processed_activities and activity.id in last_processed_activities:
                     continue
 
+                # Entrenamiento Funcional
                 if activity.type == 'Workout':
                     print('ENTRENAMIENTO: ', end="")
                     print(
                         u"{0.suffer_score} {0.name} {0.moving_time} {0.distance} https://www.strava.com/activities/{0.id}".
                         format(activity))
-                    if not dry_run:
+                    if write:
                         client.update_activity(
                             activity.id,
                             private=True,
                             name='Entrenamiento funcional')
                     continue
-
+                # Salida en bici
                 elif activity.type == 'Ride':
-                    # Actividad duplicada si el comienzo de la actual es menor al fin
-                    # de la ultima
+
+                    # Actividad duplicada si el comienzo de la actual es menor al fin de la ultima
                     if prev_activity:
                         prev_activity_end_date = prev_activity.start_date + prev_activity.elapsed_time
                         if activity.start_date < prev_activity_end_date:
@@ -170,14 +175,27 @@ for user in users:
                                 u": [{0.suffer_score}] \"{0.name}\" {0.moving_time} {0.distance} {0.start_date_local} https://www.strava.com/activities/{0.id}".
                                 format(activity))
 
+                            # Si es el Wahoo (registra temp), seteo la act previa en privada y la act en pub
                             if activity.average_temp:
-                                if not dry_run:
-                                    client.update_activity(
-                                        prev_activity.id, private=True)
+                                if write:
+                                    if k['default_private']:
+                                        client.update_activity(
+                                            activity.id, private=False)
+                                    else:
+                                        client.update_activity(
+                                            prev_activity.id, private=True)
+
+
+                            # Entonces la act. anterior es del Wahoo, la actual va en privada
                             else:
-                                if not dry_run:
-                                    client.update_activity(
-                                        activity.id, private=True)
+                                if write:
+                                    if k['default_private']:
+                                        client.update_activity(
+                                            prev_activity.id, private=False)
+                                    else:
+                                        client.update_activity(
+                                            activity.id, private=True)
+
 
                     # Actividad sin metros o de rodillo es rodillo
                     if activity.trainer or int(activity.distance) == 0:
@@ -185,31 +203,31 @@ for user in users:
                         print(
                             u": [{0.suffer_score}] \"{0.name}\" {0.moving_time} {0.distance} {0.start_date_local} https://www.strava.com/activities/{0.id}".
                             format(activity))
-                        client.update_activity(
-                            activity.id,
-                            private=False,
-                            gear_id=k['trainer_bike'],
-                            name='Rodillo')
-                        if not dry_run:
+                        if write:
                             client.update_activity(
                                 activity.id,
                                 private=True,
-                                gear_id=k['trainer_bike'],
+                                gear_id=k['bici_rodillo'],
                                 name='Rodillo')
                         prev_activity = activity
                         continue
 
+                    # Destino configurado
                     for d in k['destinations']:
                         # Actividad ida
-                        if activity.end_latlng and in_zone(
-                                activity.end_latlng, d['latlng']):
+                        if 'tolerance' in d:
+                            distance = d['tolerance']
+                        else:
+                            distance = 0.2
+
+                        if activity.end_latlng and in_zone(activity.end_latlng, d['latlng'], distance):
                             print(d['name_go'], end="")
                             print(
                                 u": [{0.suffer_score}] \"{0.name}\" {0.moving_time} {0.distance} {0.start_date_local} https://www.strava.com/activities/{0.id}".
                                 format(activity))
-                            if not dry_run and any(
+                            if write and any(
                                     x in activity.name
-                                    for x in ('Pedalada', 'Ciclismo', 'Ride',
+                                    for x in ('Pedalada', 'Ciclismo', 'Vuelta ciclista',
                                               'almuerzo')):
                                 client.update_activity(
                                     activity.id,
@@ -220,16 +238,15 @@ for user in users:
                             current_activity_processed = True
 
                         # Actividad vuelta
-                        if activity.start_latlng and in_zone(
-                                activity.start_latlng, d['latlng']):
+                        if activity.end_latlng and in_zone(activity.end_latlng, d['latlng'], distance):
                             print(d['name_back'], end="")
                             print(
                                 u": [{0.suffer_score}] \"{0.name}\" {0.moving_time} {0.distance} {0.start_date_local} https://www.strava.com/activities/{0.id}".
                                 format(activity))
-                            if not dry_run and any(
+                            if write and any(
                                     x in activity.name
-                                    for x in ('Pedalada', 'Ciclismo', 'Ride',
-                                              'almuerzo')):
+                                    for x in ('Pedalada', 'Ciclismo', 'Vuelta ciclista',
+                                              'Ride', 'almuerzo')):
                                 client.update_activity(
                                     activity.id,
                                     private=d['private'],
@@ -238,6 +255,7 @@ for user in users:
                             prev_activity = activity
                             current_activity_processed = True
 
+                    # Paso por lugar configurado
                     for p in k['pass_through_locations']:
                         # Solo act de mas de 20k
                         if activity.distance and int(
@@ -253,32 +271,45 @@ for user in users:
                                     print(
                                         u": [{0.suffer_score}] \"{0.name}\" {0.moving_time} {0.distance} {0.start_date_local} https://www.strava.com/activities/{0.id}".
                                         format(activity))
-                                    if not dry_run and any(
+                                    if write and any(
                                             x in activity.name
-                                            for x in ('Pedalada', 'Ciclismo',
+                                            for x in ('Pedalada', 'Ciclismo', 'Vuelta ciclista',
                                                       'Ride', 'almuerzo')):
                                         client.update_activity(
                                             activity.id, name=p['name'])
                                     current_activity_processed = True
                                     prev_activity = activity
-                    # Suffer score pete
+
+
                     if not current_activity_processed:
+                        # Suffer score pete
                         if activity.suffer_score and activity.suffer_score < 20 or int(
                                 activity.distance) < 10000:
                             print('PETE < 20 suffer: ', end="")
                             print(
                                 u": [{0.suffer_score}] \"{0.name}\" {0.moving_time} {0.distance} {0.start_date_local} https://www.strava.com/activities/{0.id}".
                                 format(activity))
-                            if not dry_run:
-                                client.update_activity(
-                                    activity.id, private=True)
-                        # else:
+                            if write:
+                                if not k['default_private']:
+                                    client.update_activity(
+                                        activity.id, private=True)
+                        # El resto de las actividades
+                        else:
+                            if k['default_private']:
+                                print('se hace publica')
+                                print(
+                                    u": [{0.suffer_score}] \"{0.name}\" {0.moving_time} {0.distance} {0.start_date_local} https://www.strava.com/activities/{0.id}".
+                                    format(activity))
+                                if write:
+                                    client.update_activity(
+                                        activity.id, private=False)
                         #     print('No se toca: ', end="")
                         #     print(u": [{0.suffer_score}] \"{0.name}\" {0.moving_time} {0.distance} {0.start_date_local} https://www.strava.com/activities/{0.id}".format(activity))
+
                 prev_activity = activity
         except Exception as e:
             print('ERROR', e)
             print(traceback.format_exc())
 
-if not dry_run:
+if write:
     write_last_activities(activities)
